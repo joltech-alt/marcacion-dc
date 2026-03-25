@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Marcaciones · Datacenter Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#f4f3ef; --bg2:#ffffff; --bg3:#eceae4;
+  --border:rgba(0,0,0,0.07); --border2:rgba(0,0,0,0.13);
+  --text:#1e1e1c; --text2:#5f5e5a; --text3:#9c9a92;
+  --leo:#3266ad; --rog:#1D9E75; --ivan:#BA7517; --marcos:#534AB7; --milu:#993556;
+  --font:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;line-height:1.5;}
+
+header{border-bottom:1px solid var(--border2);padding:1.1rem 2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(244,243,239,0.95);backdrop-filter:blur(12px);z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--rog);box-shadow:0 0 6px var(--rog);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.logo-text{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.04em;}
+.logo-text span{color:var(--text3);}
+.hright{display:flex;align-items:center;gap:10px;}
+.hmeta{font-family:var(--mono);font-size:11px;color:var(--text3);}
+.btn-ref{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s;}
+.btn-ref:hover{border-color:var(--rog);color:var(--rog);}
+.btn-ref:disabled{opacity:.5;cursor:default;}
+
+/* Loading */
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:200;transition:opacity .4s;}
+.loading-screen.hidden{opacity:0;pointer-events:none;}
+.spinner{width:32px;height:32px;border:2px solid var(--border2);border-top-color:var(--rog);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltxt{font-family:var(--mono);font-size:12px;color:var(--text3);}
+.retry-bar{font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px;}
+
+/* Error */
+.err{background:#fce8e8;border:1px solid #f0c0c0;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-family:var(--mono);font-size:12px;color:#A32D2D;display:none;line-height:1.6;}
+.err.on{display:block;}
+.err-retry{margin-top:8px;font-size:11px;color:#A32D2D;opacity:.7;}
+
+main{max-width:1240px;margin:0 auto;padding:1.5rem 2rem 3rem;}
+
+/* Tabs principales */
+.main-tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid var(--border2);}
+.main-tab{font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 20px;border:none;background:transparent;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;letter-spacing:.04em;}
+.main-tab:hover{color:var(--text);}
+.main-tab.active{color:var(--leo);border-bottom-color:var(--leo);}
+
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* Section labels */
+.sl{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin:2rem 0 .75rem;display:flex;align-items:center;gap:8px;}
+.sl::after{content:'';flex:1;height:1px;background:var(--border2);}
+
+/* Filtros */
+.fbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border2);}
+.fbtn{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s;}
+.fbtn:hover{border-color:var(--leo);color:var(--leo);}
+.fbtn.active{background:var(--leo);border-color:var(--leo);color:#fff;}
+
+/* KPIs */
+.kgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.kcard{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.25rem;position:relative;overflow:hidden;}
+.kcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kcard.c1::before{background:var(--leo)}.kcard.c2::before{background:var(--rog)}
+.kcard.c3::before{background:var(--ivan)}.kcard.c4::before{background:var(--marcos)}
+.klbl{font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.04em;margin-bottom:8px;}
+.knum{font-size:28px;font-weight:600;line-height:1;}
+.knum.c1{color:var(--leo)}.knum.c2{color:var(--rog)}.knum.c3{color:var(--ivan)}.knum.c4{color:var(--marcos)}
+.ksub{font-size:11px;color:var(--text3);margin-top:6px;}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.25rem;}
+.ctitle{font-size:11px;font-weight:500;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;margin-bottom:1rem;}
+.cwrap{position:relative;}
+.teq{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.tc2{display:grid;grid-template-columns:2fr 1fr;gap:12px;}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;}
+.li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);font-family:var(--mono);}
+.ld{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+
+/* Tabla personas */
+.prow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.prow:last-child{border-bottom:none;}
+.av{width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:500;flex-shrink:0;}
+.pi{flex:1;min-width:0;}
+.pn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pd{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+.bt{flex:1;background:var(--bg3);border-radius:2px;height:5px;min-width:80px;}
+.bf{height:5px;border-radius:2px;}
+.badge{font-family:var(--mono);font-size:11px;font-weight:500;padding:2px 9px;border-radius:4px;min-width:42px;text-align:center;}
+
+/* Mapa */
+.map-outer{border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:#dce9f5;}
+.map-canvas{width:100%;display:block;}
+.map-tooltip{position:absolute;background:var(--bg2);border:0.5px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:12px;pointer-events:none;display:none;white-space:nowrap;z-index:10;color:var(--text);}
+.map-tt-name{font-weight:500;margin-bottom:3px;}
+.map-tt-meta{color:var(--text2);font-size:11px;}
+.map-tabs{display:flex;gap:6px;margin-bottom:10px;}
+.map-tab{font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s;font-family:var(--mono);}
+.map-tab.active{background:var(--leo);border-color:var(--leo);color:#fff;}
+.map-insights{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+.ins-card{background:var(--bg3);border-radius:8px;padding:.85rem 1rem;}
+.ins-title{font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono);}
+.ins-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border);}
+.ins-row:last-child{border:none;}
+.ins-count{font-weight:500;}
+
+footer{border-top:1px solid var(--border2);padding:1rem 2rem;font-family:var(--mono);font-size:11px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;background:var(--bg2);}
+
+@media(max-width:768px){
+  main{padding:1rem;}
+  .kgrid{grid-template-columns:repeat(2,1fr);}
+  .tc2,.teq{grid-template-columns:1fr;}
+  header{padding:1rem;flex-wrap:wrap;gap:8px;}
+  .map-insights{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="ls">
+  <div class="spinner"></div>
+  <div class="ltxt" id="ltxt">Conectando con Google Sheets...</div>
+  <div class="retry-bar" id="retryBar"></div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div class="logo-text">DATACENTER OPS <span>// Cyber &amp; Cloud</span></div>
+  </div>
+  <div class="hright">
+    <div class="hmeta" id="hdate">—</div>
+    <button class="btn-ref" id="btnRef" onclick="manualRefresh()">↻ Actualizar</button>
+  </div>
+</header>
+
+<main>
+  <div class="err" id="errBox"></div>
+
+  <!-- Tabs principales -->
+  <div class="main-tabs">
+    <button class="main-tab active" onclick="switchTab('marcaciones',this)">MARCACIONES</button>
+    <button class="main-tab" onclick="switchTab('mapa',this)">MAPA GEO</button>
+  </div>
+
+  <!-- ── TAB: MARCACIONES ── -->
+  <div class="tab-panel active" id="panel-marcaciones">
+    <div class="sl">período</div>
+    <div class="fbar" id="fbar"></div>
+    <div class="sl">resumen</div>
+    <div class="kgrid" id="kpis"></div>
+    <div class="sl">marcaciones por mes</div>
+    <div class="card">
+      <div class="legend" id="lgnd"></div>
+      <div class="cwrap" style="height:200px"><canvas id="cMes"></canvas></div>
+    </div>
+    <div class="sl">distribución</div>
+    <div class="teq" style="margin-bottom:12px">
+      <div class="card">
+        <div class="ctitle">PARTICIPACIÓN POR COLABORADOR</div>
+        <div class="cwrap" style="height:180px"><canvas id="cDonut"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">ACTIVIDAD POR DÍA DE LA SEMANA</div>
+        <div class="cwrap" style="height:180px"><canvas id="cDia"></canvas></div>
+      </div>
+    </div>
+    <div class="tc2" style="margin-bottom:12px">
+      <div class="card">
+        <div class="ctitle">HORA PROMEDIO DE INGRESO</div>
+        <div class="cwrap" style="height:160px"><canvas id="cHora"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">PUNTUALIDAD (&lt; 09:00)</div>
+        <div class="cwrap" style="height:160px"><canvas id="cPunct"></canvas></div>
+      </div>
+    </div>
+    <div class="sl">colaboradores</div>
+    <div class="card" id="plist"></div>
+  </div>
+
+  <!-- ── TAB: MAPA ── -->
+  <div class="tab-panel" id="panel-mapa">
+    <div class="sl">resumen geográfico</div>
+    <div class="kgrid" id="geo-kpis"></div>
+
+    <div class="sl" style="margin-top:1.5rem">mapa de marcaciones — lima + medellín</div>
+    <div class="map-tabs" id="mapTabs">
+      <button class="map-tab active" onclick="setMapFilter('todos',this)">Todos</button>
+      <button class="map-tab" onclick="setMapFilter('Leo',this)">Leonardo</button>
+      <button class="map-tab" onclick="setMapFilter('Rogelio',this)">Rogelio</button>
+      <button class="map-tab" onclick="setMapFilter('otros',this)">Otros</button>
+    </div>
+    <div class="map-outer" id="mapOuter">
+      <canvas id="mapCanvas" class="map-canvas"></canvas>
+      <div class="map-tooltip" id="mapTooltip">
+        <div class="map-tt-name" id="ttName"></div>
+        <div class="map-tt-meta" id="ttZona"></div>
+        <div class="map-tt-meta" id="ttCoord"></div>
+      </div>
+    </div>
+    <div class="legend" id="mapLegend" style="margin-top:10px;"></div>
+    <div class="map-insights" id="mapInsights"></div>
+  </div>
+</main>
+
+<footer>
+  <span>Datos en vivo · Google Sheets + N8N · Telegram + Geolocalización</span>
+  <span id="fts">—</span>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════
+const SHEET_ID   = "1LzEAVE5pM9bD4PsVxQbalsTeaUn0rF0pPWKjDLQFg3A";
+const SHEET_NAME = "Hoja 1";
+const MAX_RETRIES = 4;
+const RETRY_DELAYS = [2000, 4000, 8000, 12000]; // backoff ms
+
+// ═══════════════════════════════════════════════════
+// PALETA
+// ═══════════════════════════════════════════════════
+const PCOLORS = ["#3266ad","#1D9E75","#BA7517","#534AB7","#993556","#0F6E56","#7C3AED","#B45309"];
+const AVPAL   = [["#dce8f7","#185FA5"],["#d0f0e5","#0F6E56"],["#faeeda","#854F0B"],
+                 ["#e8e5fa","#3C3489"],["#f7dde8","#72243E"],["#d0ece4","#0F5E4A"]];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let RAW=[], PERSONAS=[], C={}, AV={}, MESES=[], ML={};
+let DIAS_DATA=[0,0,0,0,0,0,0];
+let GEO_POINTS=[];
+let activeMes=null, activeMapFilter="todos";
+let retryCount=0, retryTimer=null, cbCount=0;
+const CH={};
+const gc="rgba(0,0,0,0.05)", tc="#9c9a92";
+const TT={backgroundColor:"#fff",borderColor:"rgba(0,0,0,.10)",borderWidth:1,titleColor:"#5f5e5a",bodyColor:"#1e1e1c",padding:10};
+
+// ═══════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════
+function switchTab(name, btn) {
+  document.querySelectorAll('.main-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name==='mapa') setTimeout(drawMap, 50);
+}
+
+// ═══════════════════════════════════════════════════
+// JSONP LOADER CON AUTO-RETRY
+// ═══════════════════════════════════════════════════
+function loadSheet(isRetry) {
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer=null; }
+
+  const btn = document.getElementById("btnRef");
+  btn.disabled = true;
+  if (!isRetry) {
+    btn.textContent = "↻ Cargando...";
+    retryCount = 0;
+    document.getElementById("ls").classList.remove("hidden");
+    document.getElementById("ltxt").textContent = "Conectando con Google Sheets...";
+    document.getElementById("retryBar").textContent = "";
+  } else {
+    document.getElementById("ltxt").textContent = "Reintentando conexión...";
+    document.getElementById("retryBar").textContent = `Intento ${retryCount} de ${MAX_RETRIES}`;
+  }
+  showErr(null);
+
+  // Limpiar script/callback anterior
+  const old = document.getElementById("_gvizScript");
+  if (old) old.remove();
+  const cbName = `_gvizCb${++cbCount}`;
+  // Limpiar callbacks viejos
+  Object.keys(window).filter(k=>k.startsWith("_gvizCb")).forEach(k=>{ if(k!==cbName) delete window[k]; });
+
+  window[cbName] = function(data) {
+    delete window[cbName];
+    clearTimeout(retryTimer);
+    retryCount = 0;
+    try {
+      processData(data);
+      btn.disabled=false; btn.textContent="↻ Actualizar";
+    } catch(e) {
+      btn.disabled=false; btn.textContent="↻ Actualizar";
+      document.getElementById("ls").classList.add("hidden");
+      showErr("Error al procesar datos: " + e.message);
+    }
+  };
+
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&tq=select+*&sheet=${encodeURIComponent(SHEET_NAME)}&callback=${cbName}&_t=${Date.now()}`;
+  const s = document.createElement("script");
+  s.id = "_gvizScript";
+  s.src = url;
+  s.onerror = () => handleLoadError(cbName, btn);
+  document.head.appendChild(s);
+
+  // Timeout por intento
+  const timeout = 9000;
+  retryTimer = setTimeout(() => {
+    if (window[cbName]) handleLoadError(cbName, btn);
+  }, timeout);
+}
+
+function handleLoadError(cbName, btn) {
+  if (window[cbName]) delete window[cbName];
+  const old = document.getElementById("_gvizScript");
+  if (old) old.remove();
+  clearTimeout(retryTimer);
+
+  retryCount++;
+  if (retryCount <= MAX_RETRIES) {
+    const delay = RETRY_DELAYS[retryCount-1] || 12000;
+    document.getElementById("ltxt").textContent = `Sin respuesta, reintentando en ${delay/1000}s...`;
+    document.getElementById("retryBar").textContent = `Intento ${retryCount} de ${MAX_RETRIES}`;
+    retryTimer = setTimeout(() => loadSheet(true), delay);
+  } else {
+    retryCount = 0;
+    btn.disabled=false; btn.textContent="↻ Actualizar";
+    document.getElementById("ls").classList.add("hidden");
+    showErr(
+      "No se pudo conectar con Google Sheets después de varios intentos.\n\n" +
+      "✋ Verifica que el Sheet sea público:\n" +
+      "Google Sheets → Compartir → Acceso general → Cualquier persona con el enlace → Lector\n\n" +
+      "Puedes reintentar con el botón ↻ Actualizar."
+    );
+  }
+}
+
+function manualRefresh() {
+  retryCount = 0;
+  loadSheet(false);
+}
+
+// ═══════════════════════════════════════════════════
+// PARSE DATOS GViz
+// ═══════════════════════════════════════════════════
+function parseTime(v) {
+  if (v===null||v===undefined) return null;
+  if (typeof v==="string") { const p=v.split(":").map(Number); return p.length>=2?p[0]+p[1]/60:null; }
+  if (Array.isArray(v)) return v[0]+v[1]/60;
+  if (typeof v==="object"&&v!==null&&Array.isArray(v.v)) return v.v[0]+v.v[1]/60;
+  return null;
+}
+function parseDate(v) {
+  if (!v) return null;
+  if (typeof v==="string") {
+    const m=v.match(/Date\((\d+),(\d+),(\d+)\)/);
+    if (m) return new Date(+m[1],+m[2],+m[3]);
+    const d=new Date(v); return isNaN(d)?null:d;
+  }
+  return null;
+}
+function normName(n) {
+  if (!n) return null;
+  n=n.toString().trim();
+  if (/^(ññyyy|test|prueba)$/i.test(n)) return null;
+  if (/rogelio de la tor/i.test(n)) return "Rogelio de la Torre";
+  if (/cartolin/i.test(n)) return "Leonardo Cartolin Avendaño";
+  return n;
+}
+function parseCoords(s) {
+  if (!s||s==="nan") return null;
+  const parts = s.toString().trim().split(/[/\s]+/).map(p=>p.trim()).filter(p=>p);
+  const nums=[];
+  parts.forEach(p=>{ try{nums.push(parseFloat(p));}catch(e){} });
+  return nums.length>=2?[nums[0],nums[1]]:null;
+}
+function getZona(lat,lon) {
+  if (lat>0) return "Medellín, Colombia";
+  if (lon<-77.05) return "Zona Oeste Lima";
+  if (lat<-12.06&&lon>-76.99&&lat>-12.045) return "Sede Alterna";
+  return "Datacenter Principal";
+}
+
+function processData(data) {
+  if (!data||!data.table) throw new Error("Respuesta inválida del Sheet.");
+  const cols=data.table.cols, rows=data.table.rows||[];
+  if (rows.length===0) throw new Error("La hoja no tiene registros.");
+
+  const labels=cols.map(c=>(c.label||"").toLowerCase().trim());
+  let iNombre=labels.findIndex(l=>l.includes("nombre"));
+  let iFecha =labels.findIndex(l=>(l.includes("dia")||l.includes("día"))&&l.includes("ingr"));
+  let iHora  =labels.findIndex(l=>l.includes("hora")&&l.includes("ingr"));
+  let iUbic  =labels.findIndex(l=>l.includes("ubic"));
+  if (iNombre<0) iNombre=1;
+  if (iFecha <0) iFecha =2;
+  if (iHora  <0) iHora  =3;
+  if (iUbic  <0) iUbic  =6;
+
+  const MN=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const records=[], geoPoints=[];
+  const diasCount=[0,0,0,0,0,0,0];
+
+  rows.forEach(row=>{
+    const c=row.c||[];
+    const gV=i=>(c[i]&&c[i].v!==undefined&&c[i].v!==null)?c[i].v:null;
+    const nombre=normName(gV(iNombre));
+    if (!nombre) return;
+    const fecha=parseDate(gV(iFecha));
+    const hora=parseTime(gV(iHora));
+    if (!fecha||hora===null) return;
+    const mesKey=`${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,"0")}`;
+    const dow=fecha.getDay();
+    const dIdx=dow===0?6:dow-1;
+    diasCount[dIdx]++;
+    records.push({nombre,mesKey,hora,puntual:hora<9});
+
+    // Geo
+    const ubicRaw=gV(iUbic);
+    const coords=parseCoords(ubicRaw);
+    if (coords) {
+      geoPoints.push({
+        n:nombre, lat:coords[0], lon:coords[1],
+        f:fecha.toISOString().slice(0,10),
+        h:`${String(Math.floor(hora)).padStart(2,"0")}:${String(Math.round((hora%1)*60)).padStart(2,"0")}`
+      });
+    }
+  });
+
+  if (records.length===0) throw new Error("No se pudieron parsear registros.");
+
+  const freq={};
+  records.forEach(r=>freq[r.nombre]=(freq[r.nombre]||0)+1);
+  PERSONAS=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]);
+  C={}; AV={};
+  PERSONAS.forEach((p,i)=>{
+    C[p]=PCOLORS[i%PCOLORS.length];
+    const pal=AVPAL[i%AVPAL.length];
+    const ini=p.split(" ").filter(w=>w).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+    AV[p]=[ini,pal[0],pal[1]];
+  });
+
+  const mesSet=new Set(records.map(r=>r.mesKey));
+  MESES=Array.from(mesSet).sort();
+  ML={};
+  MESES.forEach(m=>{ const [y,mo]=m.split("-"); ML[m]=`${MN[+mo-1]} '${y.slice(2)}`; });
+
+  const byPM={};
+  records.forEach(r=>{
+    const k=`${r.nombre}|||${r.mesKey}`;
+    if (!byPM[k]) byPM[k]={name:r.nombre,mes:r.mesKey,count:0,puntual:0,horaSum:0};
+    byPM[k].count++; if(r.puntual)byPM[k].puntual++; byPM[k].horaSum+=r.hora;
+  });
+
+  RAW=Object.values(byPM);
+  DIAS_DATA=diasCount;
+  GEO_POINTS=geoPoints;
+  activeMes=null;
+
+  const now=new Date();
+  document.getElementById("hdate").textContent="DATOS: "+now.toLocaleString("es-PE",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).toUpperCase();
+  document.getElementById("fts").textContent=`${records.length} registros · ${geoPoints.length} con GPS · ${now.toLocaleString("es-PE")}`;
+  document.getElementById("ls").classList.add("hidden");
+  render();
+
+  // Auto-refresh cada 5 minutos sin bloquear
+  scheduleAutoRefresh();
+}
+
+// ═══════════════════════════════════════════════════
+// AUTO-REFRESH SILENCIOSO (cada 5 min)
+// ═══════════════════════════════════════════════════
+let autoRefreshTimer=null;
+function scheduleAutoRefresh() {
+  if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+  autoRefreshTimer = setTimeout(()=>{
+    silentRefresh();
+  }, 5*60*1000);
+}
+function silentRefresh() {
+  // Refresco en background — sin mostrar loading screen
+  const old=document.getElementById("_gvizScript"); if(old) old.remove();
+  const cbName=`_gvizCb${++cbCount}`;
+  Object.keys(window).filter(k=>k.startsWith("_gvizCb")).forEach(k=>{ if(k!==cbName)delete window[k]; });
+  window[cbName]=function(data){
+    delete window[cbName];
+    try { processData(data); } catch(e) { console.warn("Silent refresh failed:", e); scheduleAutoRefresh(); }
+  };
+  const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&tq=select+*&sheet=${encodeURIComponent(SHEET_NAME)}&callback=${cbName}&_t=${Date.now()}`;
+  const s=document.createElement("script"); s.id="_gvizScript"; s.src=url;
+  s.onerror=()=>{ delete window[cbName]; scheduleAutoRefresh(); };
+  document.head.appendChild(s);
+  setTimeout(()=>{ if(window[cbName]){ delete window[cbName]; scheduleAutoRefresh(); } }, 10000);
+}
+
+// ═══════════════════════════════════════════════════
+// ERROR
+// ═══════════════════════════════════════════════════
+function showErr(msg) {
+  const el=document.getElementById("errBox");
+  if (!msg) { el.classList.remove("on"); return; }
+  el.innerText=msg; el.classList.add("on");
+}
+
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+function byP(data){
+  const m={};
+  data.forEach(r=>{
+    if(!m[r.name])m[r.name]={count:0,puntual:0,hS:0,n:0};
+    m[r.name].count+=r.count;m[r.name].puntual+=r.puntual;m[r.name].hS+=r.horaSum;m[r.name].n+=r.count;
+  });
+  return m;
+}
+function byM(data){const m={};MESES.forEach(mes=>m[mes]=0);data.forEach(r=>m[r.mes]=(m[r.mes]||0)+r.count);return m;}
+function filt(){return activeMes?RAW.filter(r=>r.mes===activeMes):RAW;}
+function fh(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60);return`${hh}:${mm.toString().padStart(2,"0")}`;}
+function dc(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+// ═══════════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════════
+function buildFilters(){
+  document.getElementById("fbar").innerHTML=
+    `<button class="fbtn active" onclick="sm(null,this)">Todos</button>`+
+    MESES.map(m=>`<button class="fbtn" onclick="sm('${m}',this)">${ML[m]}</button>`).join("");
+}
+function sm(m,btn){
+  activeMes=m;
+  document.querySelectorAll('.fbar .fbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCharts();
+}
+
+// ═══════════════════════════════════════════════════
+// KPIs MARCACIONES
+// ═══════════════════════════════════════════════════
+function renderKPIs(data){
+  const bp=byP(data);
+  const tot=Object.values(bp).reduce((s,v)=>s+v.count,0);
+  const pun=Object.values(bp).reduce((s,v)=>s+v.puntual,0);
+  const pct=tot>0?Math.round(pun/tot*100):0;
+  const act=Object.keys(bp).length;
+  const bm=byM(data);const ma=MESES.filter(m=>bm[m]>0);
+  const pr=ma.length>0?Math.round(tot/ma.length):0;
+  document.getElementById("kpis").innerHTML=`
+    <div class="kcard c1"><div class="klbl">MARCACIONES</div><div class="knum c1">${tot}</div><div class="ksub">${ma.length} meses</div></div>
+    <div class="kcard c2"><div class="klbl">COLABORADORES</div><div class="knum c2">${act}</div><div class="ksub">con registros</div></div>
+    <div class="kcard c3"><div class="klbl">PUNTUALIDAD</div><div class="knum c3">${pct}%</div><div class="ksub">antes 09:00</div></div>
+    <div class="kcard c4"><div class="klbl">PROMEDIO/MES</div><div class="knum c4">${pr}</div><div class="ksub">marcaciones</div></div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// CHARTS MARCACIONES
+// ═══════════════════════════════════════════════════
+function renderMes(data){
+  dc("mes");
+  const pp={};PERSONAS.forEach(p=>{pp[p]={};MESES.forEach(m=>pp[p][m]=0);});
+  data.forEach(r=>{if(pp[r.name])pp[r.name][r.mes]+=r.count;});
+  document.getElementById("lgnd").innerHTML=PERSONAS.map(p=>`<div class="li"><div class="ld" style="background:${C[p]}"></div>${p.split(" ")[0]}</div>`).join("");
+  CH.mes=new Chart(document.getElementById("cMes"),{type:"bar",data:{labels:MESES.map(m=>ML[m]),datasets:PERSONAS.map(p=>({label:p.split(" ")[0],data:MESES.map(m=>pp[p][m]),backgroundColor:C[p]+"cc",borderRadius:3,barPercentage:.75}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}},y:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+function renderDonut(data){
+  dc("donut");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  CH.donut=new Chart(document.getElementById("cDonut"),{type:"doughnut",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:names.map(p=>bp[p].count),backgroundColor:names.map(p=>C[p]+"cc"),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{color:tc,font:{family:"IBM Plex Mono",size:10},boxWidth:8,padding:10}},tooltip:TT},cutout:"68%"}});
+}
+function renderDia(){
+  dc("dia");
+  const diasL=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+  CH.dia=new Chart(document.getElementById("cDia"),{type:"bar",data:{labels:diasL,datasets:[{data:DIAS_DATA,backgroundColor:DIAS_DATA.map((_,i)=>i<5?"#3266adcc":"rgba(0,0,0,0.08)"),borderRadius:3,barPercentage:.6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+function renderHora(data){
+  dc("hora");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]&&bp[p].n>0&&(bp[p].hS/bp[p].n)<22);
+  const pr=names.map(p=>Math.round((bp[p].hS/bp[p].n)*100)/100);
+  CH.hora=new Chart(document.getElementById("cHora"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pr,backgroundColor:names.map(p=>C[p]+"cc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${fh(ctx.raw)}`}}},scales:{x:{min:5,max:12,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>Number.isInteger(v)?`${String(v).padStart(2,"0")}:00`:""},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+function renderPunct(data){
+  dc("punct");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  const pcts=names.map(p=>bp[p].count>0?Math.round(bp[p].puntual/bp[p].count*100):0);
+  CH.punct=new Chart(document.getElementById("cPunct"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pcts,backgroundColor:pcts.map(v=>v>=80?"#1D9E75cc":v>=50?"#BA7517cc":"#A32D2Dcc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${ctx.raw}%`}}},scales:{x:{min:0,max:100,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>v+"%"},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+function renderList(data){
+  const bp=byP(data);const sorted=PERSONAS.filter(p=>bp[p]).sort((a,b)=>bp[b].count-bp[a].count);
+  const mx=Math.max(...sorted.map(p=>bp[p].count),1);
+  document.getElementById("plist").innerHTML=sorted.map(p=>{
+    const d=bp[p],pct=d.count>0?Math.round(d.puntual/d.count*100):0,bw=Math.round(d.count/mx*100),av=AV[p];
+    const [pc,bg]=pct>=80?["#0F6E56","#d0f0e5"]:pct>=50?["#854F0B","#faeeda"]:["#A32D2D","#fce8e8"];
+    return`<div class="prow">
+      <div class="av" style="background:${av[1]};color:${av[2]}">${av[0]}</div>
+      <div class="pi"><div class="pn">${p}</div><div class="pd">${d.count} MARCACIONES · PROM. ${fh(d.hS/d.n)}</div></div>
+      <div class="bt"><div class="bf" style="width:${bw}%;background:${C[p]}bb"></div></div>
+      <div class="badge" style="background:${bg};color:${pc}">${pct}%</div>
+    </div>`;
+  }).join("");
+}
+function renderCharts(){
+  const data=filt();
+  renderKPIs(data);renderMes(data);renderDonut(data);
+  renderDia();renderHora(data);renderPunct(data);renderList(data);
+}
+
+// ═══════════════════════════════════════════════════
+// MAPA GEO
+// ═══════════════════════════════════════════════════
+const MAP_VIEW={latMin:-12.105,latMax:-12.020,lonMin:-77.095,lonMax:-76.950};
+const MDE_VIEW={latMin:6.118,latMax:6.165,lonMin:-75.640,lonMax:-75.600};
+
+function proj(lat,lon,W,H,view){
+  return [
+    (lon-view.lonMin)/(view.lonMax-view.lonMin)*W,
+    (1-(lat-view.latMin)/(view.latMax-view.latMin))*H
+  ];
+}
+
+function getMapFiltered(){
+  if (activeMapFilter==="todos") return GEO_POINTS;
+  if (activeMapFilter==="Leo")   return GEO_POINTS.filter(p=>p.n.startsWith("Leonardo"));
+  if (activeMapFilter==="Rogelio") return GEO_POINTS.filter(p=>p.n.startsWith("Rogelio"));
+  return GEO_POINTS.filter(p=>!p.n.startsWith("Leonardo")&&!p.n.startsWith("Rogelio"));
+}
+
+function setMapFilter(f,btn){
+  activeMapFilter=f;
+  document.querySelectorAll('.map-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  drawMap();
+}
+
+function drawMap(){
+  if (!GEO_POINTS.length) return;
+  const canvas=document.getElementById("mapCanvas");
+  const outer=document.getElementById("mapOuter");
+  const W=outer.clientWidth||680;
+  const H=Math.round(W*0.52);
+  canvas.width=W; canvas.height=H; canvas.style.height=H+"px";
+  const ctx=canvas.getContext("2d");
+
+  // Fondo
+  ctx.fillStyle="#dce9f5"; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(255,255,255,0.45)"; ctx.lineWidth=0.5;
+  for(let i=0;i<10;i++){
+    const x=W/10*i; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    const y=H/8*i; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+
+  const pts=getMapFiltered().filter(p=>p.lat<0);
+
+  // Heatmap zonas
+  const zonaCenters={
+    "Datacenter Principal":{lat:-12.0853,lon:-76.9724},
+    "Sede Alterna":{lat:-12.0387,lon:-76.9683},
+    "Zona Oeste Lima":{lat:-12.0843,lon:-77.0638},
+  };
+  const zonaCols={"Datacenter Principal":"rgba(50,102,173,","Sede Alterna":"rgba(29,158,117,","Zona Oeste Lima":"rgba(186,117,23,"};
+  const zonaTxtCols={"Datacenter Principal":"#0C447C","Sede Alterna":"#085041","Zona Oeste Lima":"#633806"};
+  const zc={};
+  pts.forEach(p=>{const z=getZona(p.lat,p.lon);zc[z]=(zc[z]||0)+1;});
+
+  Object.entries(zonaCenters).forEach(([zona,center])=>{
+    const cnt=zc[zona]||0; if(!cnt) return;
+    const [cx,cy]=proj(center.lat,center.lon,W,H,MAP_VIEW);
+    const r=Math.min(Math.sqrt(cnt)*9+16,65);
+    const base=zonaCols[zona]||"rgba(100,100,180,";
+    ctx.beginPath();ctx.arc(cx,cy,r*1.7,0,Math.PI*2);ctx.fillStyle=base+"0.05)";ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=base+"0.14)";ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,r*0.5,0,Math.PI*2);ctx.fillStyle=base+"0.26)";ctx.fill();
+    // Label
+    const ly=cy-r*1.75;
+    ctx.fillStyle=zonaTxtCols[zona]; ctx.font="500 11px 'IBM Plex Sans',sans-serif"; ctx.textAlign="center";
+    ctx.fillText(zona,cx,ly);
+    ctx.fillStyle=zonaTxtCols[zona]+"99"; ctx.font="400 10px 'IBM Plex Sans',sans-serif";
+    ctx.fillText(cnt+" marcaciones",cx,ly+13);
+  });
+
+  // Puntos individuales
+  pts.forEach(p=>{
+    const [px,py]=proj(p.lat,p.lon,W,H,MAP_VIEW);
+    const col=C[p.n]||"#888";
+    ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);
+    ctx.fillStyle=col+"cc";ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=1;ctx.stroke();
+  });
+
+  // Mini insert Medellín
+  const mde=GEO_POINTS.filter(p=>p.lat>0);
+  if ((activeMapFilter==="todos"||activeMapFilter==="otros") && mde.length>0){
+    const iW=Math.round(W*0.19),iH=Math.round(iW*0.95);
+    const iX=W-iW-10,iY=10;
+    ctx.fillStyle="#d4e5f5";
+    ctx.strokeStyle="rgba(83,74,183,0.45)";ctx.lineWidth=1;
+    ctx.beginPath();ctx.roundRect(iX,iY,iW,iH,6);ctx.fill();ctx.stroke();
+    ctx.fillStyle="#534AB7";ctx.font="500 9px 'IBM Plex Sans',sans-serif";ctx.textAlign="left";
+    ctx.fillText("Medellín, CO",iX+5,iY+12);
+    ctx.fillStyle="#534AB799";ctx.font="400 9px 'IBM Plex Sans',sans-serif";
+    ctx.fillText(mde.length+" marcaciones",iX+5,iY+23);
+    mde.forEach(p=>{
+      const rx=iX+(p.lon-MDE_VIEW.lonMin)/(MDE_VIEW.lonMax-MDE_VIEW.lonMin)*iW;
+      const ry=iY+(1-(p.lat-MDE_VIEW.latMin)/(MDE_VIEW.latMax-MDE_VIEW.latMin))*iH;
+      if(ry<iY+iH-4&&ry>iY+28){
+        ctx.beginPath();ctx.arc(rx,ry,5,0,Math.PI*2);
+        ctx.fillStyle="#534AB7cc";ctx.fill();
+        ctx.strokeStyle="#534AB7";ctx.lineWidth=1;ctx.stroke();
+      }
+    });
+  }
+
+  canvas._pts=pts; canvas._view=MAP_VIEW;
+}
+
+// Tooltip mapa
+const mapCanvas=document.getElementById("mapCanvas");
+mapCanvas.addEventListener("mousemove",function(e){
+  const rect=mapCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const pts=mapCanvas._pts||[];
+  const view=mapCanvas._view||MAP_VIEW;
+  const W=mapCanvas.width,H=mapCanvas.height;
+  let found=null,minD=14;
+  pts.forEach(p=>{
+    const [px,py]=proj(p.lat,p.lon,W,H,view);
+    const d=Math.sqrt((px-mx)**2+(py-my)**2);
+    if(d<minD){minD=d;found=p;}
+  });
+  const tt=document.getElementById("mapTooltip");
+  if(found){
+    document.getElementById("ttName").textContent=found.n;
+    document.getElementById("ttZona").textContent=getZona(found.lat,found.lon)+" · "+found.f+" "+found.h;
+    document.getElementById("ttCoord").textContent=found.lat.toFixed(5)+", "+found.lon.toFixed(5);
+    tt.style.display="block";
+    tt.style.left=Math.min(mx+14,mapCanvas.width-160)+"px";
+    tt.style.top=(my-12)+"px";
+  } else { tt.style.display="none"; }
+});
+mapCanvas.addEventListener("mouseleave",()=>document.getElementById("mapTooltip").style.display="none");
+
+// ═══════════════════════════════════════════════════
+// GEO KPIs + INSIGHTS
+// ═══════════════════════════════════════════════════
+function renderGeo(){
+  if (!GEO_POINTS.length) return;
+  const lima=GEO_POINTS.filter(p=>p.lat<0);
+  const mde=GEO_POINTS.filter(p=>p.lat>0);
+  const zonas={};
+  lima.forEach(p=>{const z=getZona(p.lat,p.lon);zonas[z]=(zonas[z]||0)+1;});
+  const topZ=Object.entries(zonas).sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById("geo-kpis").innerHTML=`
+    <div class="kcard c1"><div class="klbl">PUNTOS GPS</div><div class="knum c1">${GEO_POINTS.length}</div><div class="ksub">marcaciones con coords</div></div>
+    <div class="kcard c2"><div class="klbl">ZONA MÁS ACTIVA</div><div class="knum c2" style="font-size:15px">DC Principal</div><div class="ksub">${topZ?topZ[1]:0} marcaciones</div></div>
+    <div class="kcard c3"><div class="klbl">SEDES DETECTADAS</div><div class="knum c3">${Object.keys(zonas).length+(mde.length>0?1:0)}</div><div class="ksub">Lima + Medellín</div></div>
+    <div class="kcard c4"><div class="klbl">MARCACIONES REMOTAS</div><div class="knum c4">${mde.length}</div><div class="ksub">desde Medellín, CO</div></div>`;
+
+  // Legend
+  const people=[...new Set(GEO_POINTS.map(p=>p.n))];
+  document.getElementById("mapLegend").innerHTML=people.map(p=>
+    `<span class="li"><span class="ld" style="background:${C[p]||'#888'};border-radius:50%"></span>${p.split(" ")[0]}</span>`
+  ).join("");
+
+  // Insights
+  const byZona={};
+  GEO_POINTS.filter(p=>p.lat<0).forEach(p=>{const z=getZona(p.lat,p.lon);byZona[z]=(byZona[z]||0)+1;});
+  if (mde.length>0) byZona["Medellín, Colombia"]=mde.length;
+  const zonaHtml=Object.entries(byZona).sort((a,b)=>b[1]-a[1]).map(([z,c])=>
+    `<div class="ins-row"><span>${z}</span><span class="ins-count">${c}</span></div>`
+  ).join("");
+
+  const byPer={};
+  GEO_POINTS.forEach(p=>byPer[p.n]=(byPer[p.n]||0)+1);
+  const perHtml=Object.entries(byPer).sort((a,b)=>b[1]-a[1]).map(([n,c])=>{
+    const first=n.split(" ")[0];
+    return`<div class="ins-row"><span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${C[n]||'#888'};flex-shrink:0"></span>${first}</span><span class="ins-count">${c}</span></div>`;
+  }).join("");
+
+  document.getElementById("mapInsights").innerHTML=`
+    <div class="ins-card"><div class="ins-title">por zona</div>${zonaHtml}</div>
+    <div class="ins-card"><div class="ins-title">por colaborador</div>${perHtml}</div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER COMPLETO
+// ═══════════════════════════════════════════════════
+function render(){
+  buildFilters();
+  renderCharts();
+  renderGeo();
+  if (document.getElementById("panel-mapa").classList.contains("active")) drawMap();
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+window.addEventListener("resize", ()=>{
+  if (document.getElementById("panel-mapa").classList.contains("active")) drawMap();
+});
+loadSheet(false);
+</script>
+</body>
+</html>
