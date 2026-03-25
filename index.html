@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Marcaciones · Datacenter Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:#f4f3ef; --bg2:#ffffff; --bg3:#eceae4;
+    --border:rgba(0,0,0,0.07); --border2:rgba(0,0,0,0.13);
+    --text:#1e1e1c; --text2:#5f5e5a; --text3:#9c9a92;
+    --leo:#3266ad; --rog:#1D9E75; --ivan:#BA7517; --marcos:#534AB7; --milu:#993556;
+    --font:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;line-height:1.5;}
+
+  header{border-bottom:1px solid var(--border2);padding:1.1rem 2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(244,243,239,0.94);backdrop-filter:blur(12px);z-index:100;}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-dot{width:8px;height:8px;border-radius:50%;background:var(--rog);box-shadow:0 0 6px var(--rog);animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .logo-text{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.04em;}
+  .logo-text span{color:var(--text3);}
+  .hright{display:flex;align-items:center;gap:10px;}
+  .hmeta{font-family:var(--mono);font-size:11px;color:var(--text3);}
+  .btn-ref{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s;}
+  .btn-ref:hover{border-color:var(--rog);color:var(--rog);}
+  .btn-ref:disabled{opacity:.5;cursor:default;}
+
+  .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:200;transition:opacity .4s;}
+  .loading-screen.hidden{opacity:0;pointer-events:none;}
+  .spinner{width:32px;height:32px;border:2px solid var(--border2);border-top-color:var(--rog);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ltxt{font-family:var(--mono);font-size:12px;color:var(--text3);}
+
+  .err{background:#fce8e8;border:1px solid #f0c0c0;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-family:var(--mono);font-size:12px;color:#A32D2D;display:none;line-height:1.6;}
+  .err.on{display:block;}
+
+  main{max-width:1200px;margin:0 auto;padding:1.5rem 2rem 3rem;}
+  .sl{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin:2rem 0 .75rem;display:flex;align-items:center;gap:8px;}
+  .sl::after{content:'';flex:1;height:1px;background:var(--border2);}
+
+  .fbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border2);}
+  .fbtn{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s;}
+  .fbtn:hover{border-color:var(--leo);color:var(--leo);}
+  .fbtn.active{background:var(--leo);border-color:var(--leo);color:#fff;}
+
+  .kgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+  .kcard{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.25rem;position:relative;overflow:hidden;}
+  .kcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+  .kcard.c1::before{background:var(--leo)} .kcard.c2::before{background:var(--rog)}
+  .kcard.c3::before{background:var(--ivan)} .kcard.c4::before{background:var(--marcos)}
+  .klbl{font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.04em;margin-bottom:8px;}
+  .knum{font-size:28px;font-weight:600;line-height:1;}
+  .knum.c1{color:var(--leo)} .knum.c2{color:var(--rog)} .knum.c3{color:var(--ivan)} .knum.c4{color:var(--marcos)}
+  .ksub{font-size:11px;color:var(--text3);margin-top:6px;}
+
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.25rem;}
+  .ctitle{font-size:11px;font-weight:500;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;margin-bottom:1rem;}
+  .cwrap{position:relative;}
+  .teq{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .tc2{display:grid;grid-template-columns:2fr 1fr;gap:12px;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;}
+  .li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);font-family:var(--mono);}
+  .ld{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+
+  .prow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+  .prow:last-child{border-bottom:none;}
+  .av{width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:500;flex-shrink:0;}
+  .pi{flex:1;min-width:0;}
+  .pn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pd{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+  .bt{flex:1;background:var(--bg3);border-radius:2px;height:5px;min-width:80px;}
+  .bf{height:5px;border-radius:2px;}
+  .badge{font-family:var(--mono);font-size:11px;font-weight:500;padding:2px 9px;border-radius:4px;min-width:42px;text-align:center;}
+
+  footer{border-top:1px solid var(--border2);padding:1rem 2rem;font-family:var(--mono);font-size:11px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;background:var(--bg2);}
+
+  @media(max-width:768px){
+    main{padding:1rem;}
+    .kgrid{grid-template-columns:repeat(2,1fr);}
+    .tc2,.teq{grid-template-columns:1fr;}
+    header{padding:1rem;flex-wrap:wrap;gap:8px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="ls">
+  <div class="spinner"></div>
+  <div class="ltxt" id="ltxt">Conectando con Google Sheets...</div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div class="logo-text">DATACENTER OPS <span>// Cyber &amp; Cloud</span></div>
+  </div>
+  <div class="hright">
+    <div class="hmeta" id="hdate">—</div>
+    <button class="btn-ref" id="btnRef" onclick="loadSheet()">↻ Actualizar</button>
+  </div>
+</header>
+
+<main>
+  <div class="err" id="errBox"></div>
+
+  <div class="sl">período</div>
+  <div class="fbar" id="fbar"></div>
+
+  <div class="sl">resumen</div>
+  <div class="kgrid" id="kpis"></div>
+
+  <div class="sl">marcaciones por mes</div>
+  <div class="card">
+    <div class="legend" id="lgnd"></div>
+    <div class="cwrap" style="height:200px"><canvas id="cMes"></canvas></div>
+  </div>
+
+  <div class="sl">distribución</div>
+  <div class="teq" style="margin-bottom:12px">
+    <div class="card">
+      <div class="ctitle">PARTICIPACIÓN POR COLABORADOR</div>
+      <div class="cwrap" style="height:180px"><canvas id="cDonut"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">ACTIVIDAD POR DÍA DE LA SEMANA</div>
+      <div class="cwrap" style="height:180px"><canvas id="cDia"></canvas></div>
+    </div>
+  </div>
+
+  <div class="tc2" style="margin-bottom:12px">
+    <div class="card">
+      <div class="ctitle">HORA PROMEDIO DE INGRESO</div>
+      <div class="cwrap" style="height:160px"><canvas id="cHora"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">PUNTUALIDAD (&lt; 09:00)</div>
+      <div class="cwrap" style="height:160px"><canvas id="cPunct"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sl">colaboradores</div>
+  <div class="card" id="plist"></div>
+</main>
+
+<footer>
+  <span>Datos en vivo · Google Sheets + N8N · Telegram + Geolocalización</span>
+  <span id="fts">—</span>
+</footer>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────
+const SHEET_ID   = "1LzEAVE5pM9bD4PsVxQbalsTeaUn0rF0pPWKjDLQFg3A";
+const SHEET_NAME = "Hoja 1";
+
+// ─── PALETA ──────────────────────────────────────────────────────
+const PCOLORS = ["#3266ad","#1D9E75","#BA7517","#534AB7","#993556","#0F6E56","#7C3AED","#B45309"];
+const AVPAL   = [["#dce8f7","#185FA5"],["#d0f0e5","#0F6E56"],["#faeeda","#854F0B"],
+                 ["#e8e5fa","#3C3489"],["#f7dde8","#72243E"],["#d0ece4","#0F5E4A"],
+                 ["#ede8fc","#5B21B6"],["#fef3c7","#92400E"]];
+
+// ─── STATE ───────────────────────────────────────────────────────
+let RAW=[], PERSONAS=[], C={}, AV={}, MESES=[], ML={};
+let DIAS_DATA=[0,0,0,0,0,0,0], activeMes=null;
+const CH={};
+const gc="rgba(0,0,0,0.05)", tc="#9c9a92";
+const TT={backgroundColor:"#fff",borderColor:"rgba(0,0,0,.10)",borderWidth:1,titleColor:"#5f5e5a",bodyColor:"#1e1e1c",padding:10};
+
+// ─── JSONP LOADER (evita CORS) ────────────────────────────────────
+let _cbCount = 0;
+function loadSheet() {
+  const btn = document.getElementById("btnRef");
+  btn.disabled = true; btn.textContent = "↻ Cargando...";
+  showErr(null);
+  document.getElementById("ltxt").textContent = "Conectando con Google Sheets...";
+  document.getElementById("ls").classList.remove("hidden");
+
+  // Limpiar callback anterior
+  const cbName = `_gvizCb${++_cbCount}`;
+  const existing = document.getElementById("_gvizScript");
+  if (existing) existing.remove();
+
+  // Definir callback global
+  window[cbName] = function(data) {
+    delete window[cbName];
+    try {
+      processData(data);
+    } catch(e) {
+      showErr("Error al procesar datos: " + e.message);
+      document.getElementById("ls").classList.add("hidden");
+    }
+    btn.disabled = false; btn.textContent = "↻ Actualizar";
+  };
+
+  // Inyectar script tag (JSONP — sin restricciones CORS)
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&tq=select+*&sheet=${encodeURIComponent(SHEET_NAME)}&callback=${cbName}`;
+  const s = document.createElement("script");
+  s.id = "_gvizScript";
+  s.src = url;
+  s.onerror = () => {
+    delete window[cbName];
+    btn.disabled = false; btn.textContent = "↻ Actualizar";
+    document.getElementById("ls").classList.add("hidden");
+    showErr("No se pudo conectar con Google Sheets.\n\n✋ Asegúrate de que el Sheet esté configurado como público:\nGoogle Sheets → Compartir → Acceso general → Cualquier persona con el enlace → Lector");
+  };
+  document.head.appendChild(s);
+
+  // Timeout de seguridad (8s)
+  setTimeout(() => {
+    if (window[cbName]) {
+      delete window[cbName];
+      btn.disabled = false; btn.textContent = "↻ Actualizar";
+      document.getElementById("ls").classList.add("hidden");
+      showErr("Timeout al conectar con Google Sheets. Verifica que el Sheet sea público.");
+    }
+  }, 8000);
+}
+
+// ─── PROCESAR DATOS GViz ──────────────────────────────────────────
+function parseTime(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const p = v.split(":").map(Number);
+    return p.length >= 2 ? p[0] + p[1]/60 : null;
+  }
+  // GViz TimeOfDay array [h,m,s,ms]
+  if (Array.isArray(v)) return v[0] + v[1]/60;
+  if (typeof v === "object" && v !== null) {
+    if (Array.isArray(v.v)) return v.v[0] + v.v[1]/60;
+  }
+  return null;
+}
+
+function parseDate(v) {
+  if (!v) return null;
+  if (typeof v === "string") {
+    // "Date(2025,7,21)" — month 0-based
+    const m = v.match(/Date\((\d+),(\d+),(\d+)\)/);
+    if (m) return new Date(+m[1], +m[2], +m[3]);
+    const d = new Date(v); return isNaN(d) ? null : d;
+  }
+  return null;
+}
+
+function normName(n) {
+  if (!n) return null;
+  n = n.trim();
+  if (/^(ññyyy|test|prueba)$/i.test(n)) return null;
+  // Normalizar variantes
+  if (/rogelio de la tor/i.test(n)) return "Rogelio de la Torre";
+  if (/cartolin/i.test(n)) return "Leonardo Cartolin Avendaño";
+  return n;
+}
+
+function processData(data) {
+  if (!data || !data.table) throw new Error("Respuesta inválida del Sheet.");
+
+  const cols = data.table.cols;
+  const rows = data.table.rows || [];
+
+  if (rows.length === 0) throw new Error("La hoja no tiene registros.");
+
+  // Detectar índices de columnas por label
+  const labels = cols.map(c => (c.label||"").toLowerCase().trim());
+  let iNombre = labels.findIndex(l => l.includes("nombre"));
+  let iFecha  = labels.findIndex(l => (l.includes("dia") || l.includes("día")) && l.includes("ingr"));
+  let iHora   = labels.findIndex(l => l.includes("hora") && l.includes("ingr"));
+  // Fallbacks por posición (columnas: ID, Nombre, Dia Ingreso, Hora Ingreso...)
+  if (iNombre < 0) iNombre = 1;
+  if (iFecha  < 0) iFecha  = 2;
+  if (iHora   < 0) iHora   = 3;
+
+  const records = [];
+  const diasCount = [0,0,0,0,0,0,0];
+  const MN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  rows.forEach(row => {
+    const c = row.c || [];
+    const getV = i => (c[i] && c[i].v !== undefined && c[i].v !== null) ? c[i].v : null;
+
+    const nombre = normName(getV(iNombre));
+    if (!nombre) return;
+
+    const fechaRaw = getV(iFecha);
+    const horaRaw  = getV(iHora);
+
+    const fecha = parseDate(fechaRaw);
+    const hora  = parseTime(horaRaw);
+    if (!fecha || hora === null) return;
+
+    const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,"0")}`;
+    const dow = fecha.getDay(); // 0=dom
+    const dIdx = dow === 0 ? 6 : dow - 1; // lun=0..dom=6
+    diasCount[dIdx]++;
+
+    records.push({ nombre, mesKey, hora, puntual: hora < 9 });
+  });
+
+  if (records.length === 0) throw new Error("No se pudieron parsear registros. Revisa el formato del Sheet.");
+
+  // Construir personas únicas ordenadas por frecuencia
+  const freq = {};
+  records.forEach(r => freq[r.nombre] = (freq[r.nombre]||0)+1);
+  PERSONAS = Object.keys(freq).sort((a,b) => freq[b]-freq[a]);
+
+  C = {}; AV = {};
+  PERSONAS.forEach((p,i) => {
+    C[p] = PCOLORS[i % PCOLORS.length];
+    const pal = AVPAL[i % AVPAL.length];
+    const ini = p.split(" ").filter(w=>w).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+    AV[p] = [ini, pal[0], pal[1]];
+  });
+
+  // Meses únicos ordenados
+  const mesSet = new Set(records.map(r=>r.mesKey));
+  MESES = Array.from(mesSet).sort();
+  ML = {};
+  MESES.forEach(m => { const [y,mo]=m.split("-"); ML[m]=`${MN[+mo-1]} '${y.slice(2)}`; });
+
+  // Agregar por persona+mes
+  const byPM = {};
+  records.forEach(r => {
+    const k = `${r.nombre}|||${r.mesKey}`;
+    if (!byPM[k]) byPM[k] = {name:r.nombre, mes:r.mesKey, count:0, puntual:0, horaSum:0};
+    byPM[k].count++;
+    if (r.puntual) byPM[k].puntual++;
+    byPM[k].horaSum += r.hora;
+  });
+
+  RAW = Object.values(byPM);
+  DIAS_DATA = diasCount;
+  activeMes = null;
+
+  // Actualizar UI
+  const now = new Date();
+  document.getElementById("hdate").textContent = "DATOS: " + now.toLocaleString("es-PE",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).toUpperCase();
+  document.getElementById("fts").textContent = `${records.length} registros · ${now.toLocaleString("es-PE")}`;
+  document.getElementById("ls").classList.add("hidden");
+
+  render();
+}
+
+// ─── ERROR ───────────────────────────────────────────────────────
+function showErr(msg) {
+  const el = document.getElementById("errBox");
+  if (!msg) { el.classList.remove("on"); return; }
+  el.innerText = msg; el.classList.add("on");
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────
+function byP(data) {
+  const m={};
+  data.forEach(r=>{
+    if(!m[r.name])m[r.name]={count:0,puntual:0,hS:0,n:0};
+    m[r.name].count+=r.count; m[r.name].puntual+=r.puntual;
+    m[r.name].hS+=r.horaSum; m[r.name].n+=r.count;
+  });
+  return m;
+}
+function byM(data){const m={};MESES.forEach(mes=>m[mes]=0);data.forEach(r=>m[r.mes]=(m[r.mes]||0)+r.count);return m;}
+function filt(){return activeMes?RAW.filter(r=>r.mes===activeMes):RAW;}
+function fh(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60);return`${hh}:${mm.toString().padStart(2,"0")}`;}
+function dc(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+// ─── FILTROS ─────────────────────────────────────────────────────
+function buildFilters(){
+  document.getElementById("fbar").innerHTML=
+    `<button class="fbtn active" onclick="sm(null,this)">Todos</button>`+
+    MESES.map(m=>`<button class="fbtn" onclick="sm('${m}',this)">${ML[m]}</button>`).join("");
+}
+function sm(m,btn){
+  activeMes=m;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCharts();
+}
+
+// ─── KPIs ────────────────────────────────────────────────────────
+function renderKPIs(data){
+  const bp=byP(data);
+  const tot=Object.values(bp).reduce((s,v)=>s+v.count,0);
+  const pun=Object.values(bp).reduce((s,v)=>s+v.puntual,0);
+  const pct=tot>0?Math.round(pun/tot*100):0;
+  const act=Object.keys(bp).length;
+  const bm=byM(data);const ma=MESES.filter(m=>bm[m]>0);
+  const pr=ma.length>0?Math.round(tot/ma.length):0;
+  document.getElementById("kpis").innerHTML=`
+    <div class="kcard c1"><div class="klbl">MARCACIONES</div><div class="knum c1">${tot}</div><div class="ksub">${ma.length} mes${ma.length!==1?"es":""} registrados</div></div>
+    <div class="kcard c2"><div class="klbl">COLABORADORES</div><div class="knum c2">${act}</div><div class="ksub">con registros activos</div></div>
+    <div class="kcard c3"><div class="klbl">PUNTUALIDAD</div><div class="knum c3">${pct}%</div><div class="ksub">ingresos antes 09:00</div></div>
+    <div class="kcard c4"><div class="klbl">PROMEDIO / MES</div><div class="knum c4">${pr}</div><div class="ksub">marcaciones mensuales</div></div>`;
+}
+
+// ─── CHARTS ──────────────────────────────────────────────────────
+function renderMes(data){
+  dc("mes");
+  const pp={};PERSONAS.forEach(p=>{pp[p]={};MESES.forEach(m=>pp[p][m]=0);});
+  data.forEach(r=>{if(pp[r.name])pp[r.name][r.mes]+=r.count;});
+  document.getElementById("lgnd").innerHTML=PERSONAS.map(p=>`<div class="li"><div class="ld" style="background:${C[p]}"></div>${p.split(" ")[0]}</div>`).join("");
+  CH.mes=new Chart(document.getElementById("cMes"),{type:"bar",data:{labels:MESES.map(m=>ML[m]),datasets:PERSONAS.map(p=>({label:p.split(" ")[0],data:MESES.map(m=>pp[p][m]),backgroundColor:C[p]+"cc",borderRadius:3,barPercentage:.75}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}},y:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+
+function renderDonut(data){
+  dc("donut");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  CH.donut=new Chart(document.getElementById("cDonut"),{type:"doughnut",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:names.map(p=>bp[p].count),backgroundColor:names.map(p=>C[p]+"cc"),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{color:tc,font:{family:"IBM Plex Mono",size:10},boxWidth:8,padding:10}},tooltip:TT},cutout:"68%"}});
+}
+
+function renderDia(){
+  dc("dia");
+  const diasL=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+  CH.dia=new Chart(document.getElementById("cDia"),{type:"bar",data:{labels:diasL,datasets:[{data:DIAS_DATA,backgroundColor:DIAS_DATA.map((_,i)=>i<5?"#3266adcc":"rgba(0,0,0,0.08)"),borderRadius:3,barPercentage:.6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+
+function renderHora(data){
+  dc("hora");
+  const bp=byP(data);
+  const names=PERSONAS.filter(p=>bp[p]&&bp[p].n>0&&(bp[p].hS/bp[p].n)<22);
+  const pr=names.map(p=>Math.round((bp[p].hS/bp[p].n)*100)/100);
+  CH.hora=new Chart(document.getElementById("cHora"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pr,backgroundColor:names.map(p=>C[p]+"cc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${fh(ctx.raw)}`}}},scales:{x:{min:5,max:12,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>Number.isInteger(v)?`${String(v).padStart(2,"0")}:00`:""},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+
+function renderPunct(data){
+  dc("punct");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  const pcts=names.map(p=>bp[p].count>0?Math.round(bp[p].puntual/bp[p].count*100):0);
+  CH.punct=new Chart(document.getElementById("cPunct"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pcts,backgroundColor:pcts.map(v=>v>=80?"#1D9E75cc":v>=50?"#BA7517cc":"#A32D2Dcc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${ctx.raw}%`}}},scales:{x:{min:0,max:100,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>v+"%"},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+
+function renderList(data){
+  const bp=byP(data);
+  const sorted=PERSONAS.filter(p=>bp[p]).sort((a,b)=>bp[b].count-bp[a].count);
+  const mx=Math.max(...sorted.map(p=>bp[p].count),1);
+  document.getElementById("plist").innerHTML=sorted.map(p=>{
+    const d=bp[p],pct=d.count>0?Math.round(d.puntual/d.count*100):0,bw=Math.round(d.count/mx*100),av=AV[p];
+    const [pc,bg]=pct>=80?["#0F6E56","#d0f0e5"]:pct>=50?["#854F0B","#faeeda"]:["#A32D2D","#fce8e8"];
+    return`<div class="prow">
+      <div class="av" style="background:${av[1]};color:${av[2]}">${av[0]}</div>
+      <div class="pi"><div class="pn">${p}</div><div class="pd">${d.count} MARCACIONES · PROM. INGRESO ${fh(d.hS/d.n)}</div></div>
+      <div class="bt"><div class="bf" style="width:${bw}%;background:${C[p]}bb"></div></div>
+      <div class="badge" style="background:${bg};color:${pc}">${pct}%</div>
+    </div>`;
+  }).join("");
+}
+
+function renderCharts(){
+  const data=filt();
+  renderKPIs(data); renderMes(data); renderDonut(data);
+  renderDia(); renderHora(data); renderPunct(data); renderList(data);
+}
+
+function render(){ buildFilters(); renderCharts(); }
+
+// ─── INIT ────────────────────────────────────────────────────────
+loadSheet();
+</script>
+</body>
+</html>
