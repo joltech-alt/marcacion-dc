@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Marcaciones · Datacenter Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:      #f4f3ef;
+    --bg2:     #ffffff;
+    --bg3:     #eceae4;
+    --border:  rgba(0,0,0,0.07);
+    --border2: rgba(0,0,0,0.13);
+    --text:    #1e1e1c;
+    --text2:   #5f5e5a;
+    --text3:   #9c9a92;
+    --leo:     #3266ad;
+    --rog:     #1D9E75;
+    --ivan:    #BA7517;
+    --marcos:  #534AB7;
+    --milu:    #993556;
+    --ok:      #0F6E56;
+    --ok-bg:   #d0f0e5;
+    --mid:     #854F0B;
+    --mid-bg:  #faeeda;
+    --bad:     #A32D2D;
+    --bad-bg:  #fce8e8;
+    --font: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; line-height: 1.5; }
+
+  header {
+    border-bottom: 1px solid var(--border2);
+    padding: 1.1rem 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0;
+    background: rgba(244,243,239,0.94);
+    backdrop-filter: blur(12px); z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rog); box-shadow: 0 0 6px var(--rog); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .logo-text { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+  .logo-text span { color: var(--text3); }
+  .header-meta { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+
+  .slabel {
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase;
+    margin: 2rem 0 0.75rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .slabel::after { content:''; flex:1; height:1px; background:var(--border2); }
+
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border2); }
+  .fbtn { font-family: var(--mono); font-size: 11px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text2); cursor: pointer; transition: all .15s; }
+  .fbtn:hover { border-color: var(--leo); color: var(--leo); }
+  .fbtn.active { background: var(--leo); border-color: var(--leo); color: #fff; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+  .kpi-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.25rem; position: relative; overflow: hidden; }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .kpi-card.c1::before { background: var(--leo); }
+  .kpi-card.c2::before { background: var(--rog); }
+  .kpi-card.c3::before { background: var(--ivan); }
+  .kpi-card.c4::before { background: var(--marcos); }
+  .kpi-lbl { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.04em; margin-bottom: 8px; }
+  .kpi-num { font-size: 28px; font-weight: 600; line-height: 1; }
+  .kpi-num.c1{color:var(--leo)} .kpi-num.c2{color:var(--rog)} .kpi-num.c3{color:var(--ivan)} .kpi-num.c4{color:var(--marcos)}
+  .kpi-sub { font-size: 11px; color: var(--text3); margin-top: 6px; }
+
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+  .card-title { font-size: 11px; font-weight: 500; color: var(--text3); font-family: var(--mono); letter-spacing: 0.06em; margin-bottom: 1rem; }
+  .chart-wrap { position: relative; }
+
+  .two-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .two-col    { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); font-family: var(--mono); }
+  .ldot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  .prow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .prow:last-child { border-bottom: none; }
+  .av { width: 34px; height: 34px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10px; font-weight: 500; flex-shrink: 0; }
+  .pinfo { flex: 1; min-width: 0; }
+  .pname { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pdetail { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+  .btrack { flex: 1; background: var(--bg3); border-radius: 2px; height: 5px; min-width: 80px; }
+  .bfill { height: 5px; border-radius: 2px; }
+  .badge { font-family: var(--mono); font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 4px; min-width: 42px; text-align: center; }
+
+  footer { border-top: 1px solid var(--border2); padding: 1rem 2rem; font-family: var(--mono); font-size: 11px; color: var(--text3); display: flex; justify-content: space-between; align-items: center; background: var(--bg2); }
+
+  @media (max-width: 768px) {
+    main { padding: 1rem; }
+    .kpi-grid { grid-template-columns: repeat(2,1fr); }
+    .two-col, .two-equal { grid-template-columns: 1fr; }
+    header { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div class="logo-text">DATACENTER OPS <span>// Cyber &amp; Cloud</span></div>
+  </div>
+  <div class="header-meta" id="hdate">—</div>
+</header>
+
+<main>
+  <div class="slabel">período</div>
+  <div class="filter-bar" id="filters"></div>
+
+  <div class="slabel">resumen</div>
+  <div class="kpi-grid" id="kpis"></div>
+
+  <div class="slabel">marcaciones por mes</div>
+  <div class="card">
+    <div class="legend" id="legend-mes"></div>
+    <div class="chart-wrap" style="height:200px"><canvas id="cMes"></canvas></div>
+  </div>
+
+  <div class="slabel">distribución</div>
+  <div class="two-equal" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-title">PARTICIPACIÓN POR COLABORADOR</div>
+      <div class="chart-wrap" style="height:180px"><canvas id="cDonut"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">ACTIVIDAD POR DÍA DE LA SEMANA</div>
+      <div class="chart-wrap" style="height:180px"><canvas id="cDia"></canvas></div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-title">HORA PROMEDIO DE INGRESO</div>
+      <div class="chart-wrap" style="height:160px"><canvas id="cHora"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">PUNTUALIDAD (&lt; 09:00)</div>
+      <div class="chart-wrap" style="height:160px"><canvas id="cPunct"></canvas></div>
+    </div>
+  </div>
+
+  <div class="slabel">colaboradores</div>
+  <div class="card" id="plist"></div>
+</main>
+
+<footer>
+  <span>Marcaciones via Telegram + Geolocalización · N8N Automation</span>
+  <span id="fts">—</span>
+</footer>
+
+<script>
+const RAW=[
+  {name:"Leonardo Cartolin Avendaño",mes:"2025-08",count:7,hora:8.9,puntual:4},
+  {name:"Rogelio de la Torre",mes:"2025-08",count:6,hora:8.6,puntual:5},
+  {name:"Leonardo Cartolin Avendaño",mes:"2025-09",count:21,hora:8.5,puntual:11},
+  {name:"Rogelio de la Torre",mes:"2025-09",count:9,hora:8.2,puntual:8},
+  {name:"Marcos Montesinos",mes:"2025-09",count:1,hora:8.7,puntual:0},
+  {name:"Leonardo Cartolin Avendaño",mes:"2025-10",count:16,hora:8.4,puntual:9},
+  {name:"Rogelio de la Torre",mes:"2025-10",count:23,hora:8.1,puntual:20},
+  {name:"Leonardo Cartolin Avendaño",mes:"2025-11",count:20,hora:8.3,puntual:11},
+  {name:"Rogelio de la Torre",mes:"2025-11",count:21,hora:8.1,puntual:18},
+  {name:"Ivan Sarmiento",mes:"2025-11",count:4,hora:6.7,puntual:2},
+  {name:"Miluska Salhuana",mes:"2025-11",count:1,hora:8.0,puntual:1},
+  {name:"Leonardo Cartolin Avendaño",mes:"2025-12",count:20,hora:8.4,puntual:11},
+  {name:"Rogelio de la Torre",mes:"2025-12",count:18,hora:8.1,puntual:15},
+  {name:"Leonardo Cartolin Avendaño",mes:"2026-01",count:17,hora:8.4,puntual:9},
+  {name:"Rogelio de la Torre",mes:"2026-01",count:14,hora:8.2,puntual:12},
+  {name:"Marcos Montesinos",mes:"2026-01",count:1,hora:22.2,puntual:0},
+  {name:"Leonardo Cartolin Avendaño",mes:"2026-02",count:17,hora:8.3,puntual:9},
+  {name:"Rogelio de la Torre",mes:"2026-02",count:10,hora:8.1,puntual:9},
+  {name:"Leonardo Cartolin Avendaño",mes:"2026-03",count:14,hora:8.5,puntual:9},
+  {name:"Rogelio de la Torre",mes:"2026-03",count:1,hora:8.3,puntual:1},
+  {name:"Marcos Montesinos",mes:"2026-03",count:5,hora:12.0,puntual:0},
+];
+const MESES=["2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"];
+const ML={"2025-08":"Ago '25","2025-09":"Sep '25","2025-10":"Oct '25","2025-11":"Nov '25","2025-12":"Dic '25","2026-01":"Ene '26","2026-02":"Feb '26","2026-03":"Mar '26"};
+const PERSONAS=["Leonardo Cartolin Avendaño","Rogelio de la Torre","Ivan Sarmiento","Marcos Montesinos","Miluska Salhuana"];
+const C={"Leonardo Cartolin Avendaño":"#3266ad","Rogelio de la Torre":"#1D9E75","Ivan Sarmiento":"#BA7517","Marcos Montesinos":"#534AB7","Miluska Salhuana":"#993556"};
+const AV={
+  "Leonardo Cartolin Avendaño":["LC","#dce8f7","#185FA5"],
+  "Rogelio de la Torre":["RDT","#d0f0e5","#0F6E56"],
+  "Ivan Sarmiento":["IS","#faeeda","#854F0B"],
+  "Marcos Montesinos":["MM","#e8e5fa","#3C3489"],
+  "Miluska Salhuana":["MK","#f7dde8","#72243E"]
+};
+const DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const DIAS_D=[54,52,47,46,45,1,1];
+let activeMes=null;
+const CH={};
+const gc="rgba(0,0,0,0.05)", tc="#9c9a92";
+const TT={backgroundColor:"#fff",borderColor:"rgba(0,0,0,0.10)",borderWidth:1,titleColor:"#5f5e5a",bodyColor:"#1e1e1c",padding:10};
+
+function byP(data){const m={};data.forEach(r=>{if(!m[r.name])m[r.name]={count:0,puntual:0,hS:0,n:0};m[r.name].count+=r.count;m[r.name].puntual+=r.puntual;m[r.name].hS+=r.hora*r.count;m[r.name].n+=r.count;});return m;}
+function byM(data){const m={};MESES.forEach(mes=>m[mes]=0);data.forEach(r=>m[r.mes]=(m[r.mes]||0)+r.count);return m;}
+function filt(){return activeMes?RAW.filter(r=>r.mes===activeMes):RAW;}
+function fh(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60);return`${hh}:${mm.toString().padStart(2,"0")}`;}
+function dc(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+// Filters
+document.getElementById("filters").innerHTML=`<button class="fbtn active" onclick="sm(null,this)">Todos</button>`+MESES.map(m=>`<button class="fbtn" onclick="sm('${m}',this)">${ML[m]}</button>`).join("");
+function sm(m,btn){activeMes=m;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');render();}
+
+function renderKPIs(data){
+  const bp=byP(data);
+  const tot=Object.values(bp).reduce((s,v)=>s+v.count,0);
+  const pun=Object.values(bp).reduce((s,v)=>s+v.puntual,0);
+  const pct=tot>0?Math.round(pun/tot*100):0;
+  const act=Object.keys(bp).length;
+  const bm=byM(data);const ma=MESES.filter(m=>bm[m]>0);
+  const pr=ma.length>0?Math.round(tot/ma.length):0;
+  document.getElementById("kpis").innerHTML=`
+    <div class="kpi-card c1"><div class="kpi-lbl">MARCACIONES</div><div class="kpi-num c1">${tot}</div><div class="kpi-sub">${ma.length} mes${ma.length!==1?"es":""} registrados</div></div>
+    <div class="kpi-card c2"><div class="kpi-lbl">COLABORADORES</div><div class="kpi-num c2">${act}</div><div class="kpi-sub">con registros activos</div></div>
+    <div class="kpi-card c3"><div class="kpi-lbl">PUNTUALIDAD</div><div class="kpi-num c3">${pct}%</div><div class="kpi-sub">ingresos antes 09:00</div></div>
+    <div class="kpi-card c4"><div class="kpi-lbl">PROMEDIO / MES</div><div class="kpi-num c4">${pr}</div><div class="kpi-sub">marcaciones mensuales</div></div>`;
+  const now=new Date();
+  document.getElementById("hdate").textContent="ULT. ACT: "+now.toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
+  document.getElementById("fts").textContent="GENERADO "+now.toLocaleString("es-PE");
+}
+
+function renderMes(data){
+  dc("mes");
+  const pp={};PERSONAS.forEach(p=>{pp[p]={};MESES.forEach(m=>pp[p][m]=0);});
+  data.forEach(r=>{if(pp[r.name])pp[r.name][r.mes]+=r.count;});
+  document.getElementById("legend-mes").innerHTML=PERSONAS.map(p=>`<div class="legend-item"><div class="ldot" style="background:${C[p]}"></div>${p.split(" ")[0]}</div>`).join("");
+  CH.mes=new Chart(document.getElementById("cMes"),{type:"bar",data:{labels:MESES.map(m=>ML[m]),datasets:PERSONAS.map(p=>({label:p.split(" ")[0],data:MESES.map(m=>pp[p][m]),backgroundColor:C[p]+"cc",borderRadius:3,barPercentage:.75}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}},y:{stacked:true,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+
+function renderDonut(data){
+  dc("donut");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  CH.donut=new Chart(document.getElementById("cDonut"),{type:"doughnut",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:names.map(p=>bp[p].count),backgroundColor:names.map(p=>C[p]+"cc"),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{color:tc,font:{family:"IBM Plex Mono",size:10},boxWidth:8,padding:10}},tooltip:TT},cutout:"68%"}});
+}
+
+function renderDia(){
+  dc("dia");
+  CH.dia=new Chart(document.getElementById("cDia"),{type:"bar",data:{labels:DIAS,datasets:[{data:DIAS_D,backgroundColor:DIAS_D.map((_,i)=>i<5?"#3266adcc":"rgba(0,0,0,0.08)"),borderRadius:3,barPercentage:.6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{color:gc}}}}});
+}
+
+function renderHora(data){
+  dc("hora");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]&&bp[p].n>0&&(bp[p].hS/bp[p].n)<22);
+  const pr=names.map(p=>Math.round((bp[p].hS/bp[p].n)*100)/100);
+  CH.hora=new Chart(document.getElementById("cHora"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pr,backgroundColor:names.map(p=>C[p]+"cc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${fh(ctx.raw)}`}}},scales:{x:{min:5,max:12,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>v%1===0?`${v<10?"0":""}${v}:00`:""},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+
+function renderPunct(data){
+  dc("punct");
+  const bp=byP(data);const names=PERSONAS.filter(p=>bp[p]);
+  const pcts=names.map(p=>bp[p].count>0?Math.round(bp[p].puntual/bp[p].count*100):0);
+  CH.punct=new Chart(document.getElementById("cPunct"),{type:"bar",data:{labels:names.map(p=>p.split(" ")[0]),datasets:[{data:pcts,backgroundColor:pcts.map(v=>v>=80?"#1D9E75cc":v>=50?"#BA7517cc":"#A32D2Dcc"),borderRadius:3,barPercentage:.5}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:ctx=>` ${ctx.raw}%`}}},scales:{x:{min:0,max:100,ticks:{color:tc,font:{family:"IBM Plex Mono",size:11},callback:v=>v+"%"},grid:{color:gc}},y:{ticks:{color:tc,font:{family:"IBM Plex Mono",size:11}},grid:{display:false}}}}});
+}
+
+function renderList(data){
+  const bp=byP(data);const sorted=PERSONAS.filter(p=>bp[p]).sort((a,b)=>bp[b].count-bp[a].count);
+  const mx=Math.max(...sorted.map(p=>bp[p].count));
+  document.getElementById("plist").innerHTML=sorted.map(p=>{
+    const d=bp[p],pct=d.count>0?Math.round(d.puntual/d.count*100):0,bw=Math.round(d.count/mx*100),av=AV[p];
+    const [pc,bg]=pct>=80?["#0F6E56","#d0f0e5"]:pct>=50?["#854F0B","#faeeda"]:["#A32D2D","#fce8e8"];
+    return`<div class="prow">
+      <div class="av" style="background:${av[1]};color:${av[2]}">${av[0]}</div>
+      <div class="pinfo"><div class="pname">${p}</div><div class="pdetail">${d.count} MARCACIONES · PROM. INGRESO ${fh(d.hS/d.n)}</div></div>
+      <div class="btrack"><div class="bfill" style="width:${bw}%;background:${C[p]}bb"></div></div>
+      <div class="badge" style="background:${bg};color:${pc}">${pct}%</div>
+    </div>`;
+  }).join("");
+}
+
+function render(){const data=filt();renderKPIs(data);renderMes(data);renderDonut(data);renderDia();renderHora(data);renderPunct(data);renderList(data);}
+render();
+</script>
+</body>
+</html>
